@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Text.RegularExpressions;
-using System.Xml;
 using System.Xml.Linq;
 using Word = Microsoft.Office.Interop.Word;
 
@@ -10,13 +10,13 @@ namespace AnalisWordLib
     public sealed class DataUnit //Класс описывающий формат данных план-графика
     {
         public string Dir { set; get; }
-        public Dictionary<string, string> PlanDictionary { set; get; }
+        public Dictionary<string, DateTime> PlanDictionary { set; get; }
         public string Owner { set; get; }
 
         public DataUnit()
         {
             Dir = string.Empty;
-            PlanDictionary = new Dictionary<string, string>();
+            PlanDictionary = new Dictionary<string, DateTime>();
             Owner = string.Empty;
         }
 
@@ -25,15 +25,52 @@ namespace AnalisWordLib
             if (Owner == string.Empty) return true;
             return false;
         }
+
+        public static bool IsValidName(string name)
+        {
+            const string namePattern = @"^[А-Я][a-я]+\s[А-Я]\.[А-Я]\.$";
+            var reg = new Regex(namePattern);
+            var match = reg.Match(name);
+            if (!match.Success)
+            {
+                return false;
+            }
+            return true;
+        }
+
+        public bool AddToPlan(string name, string date)
+        {
+            string pattern = "dd.MM.yyyy";
+            if (date.Length == 9)
+            {
+                date = "0" + date;
+            }
+
+            if (date.Length == 8)
+            {
+                pattern = "dd.MM.yy";
+            }
+            DateTime dateTime = new DateTime();
+            CultureInfo enUs = new CultureInfo("en-US");
+            bool rez = DateTime.TryParseExact(date, pattern, new CultureInfo("en-US"), DateTimeStyles.None, out dateTime);
+            //dateTime = DateTime.TryParseExact(date, "dd.MM.yyyy", null);
+            if (rez)
+            {
+                PlanDictionary.Add(name, dateTime);
+            }
+
+            return rez;
+        }
     }
 
-    public abstract class DataStorage // Абстрактный класс для описания хранилища данных xml/DB
+    public abstract class DataStorage<T> // Абстрактный класс для описания хранилища данных xml/DB
     {
-        public abstract string TryAdd(DataUnit data);
-        public abstract DataUnit FindByName(string name);
+        public abstract string TryAdd(T data);
+        public abstract List<T> GetDataList();
+        public abstract T FindByName(string name);
     }
 
-    public sealed class XmlStorage : DataStorage
+    public sealed class XmlStorage : DataStorage<DataUnit>
     {
         private readonly XDocument _storage;
         private readonly XElement _students;
@@ -49,62 +86,74 @@ namespace AnalisWordLib
             }
             catch (Exception e)
             {
-                throw new Exception("CANT_OPEN_STORAGE", e.InnerException);
+                throw new Exception(e.Message, e.InnerException);
             }           
         }
 
         public override string TryAdd(DataUnit data)
         {
-            try
+            if (_students == null)
             {
-                if (_students == null)
-                {
-                    throw new Exception("STORAGE_IS_NULL");
-                }
-
-                if (TryFind(data.Owner))
-                {
-                    return "Данный слушатель уже существует: " + data.Owner + " Dirr: " + data.Dir;
-                }
-
-                if (CheckData(data) == false)
-                {
-                    return "Неверный формат данных слушателя: " + data.Owner + " Dirr: " + data.Dir;
-                }
-
-
-                _students.Add(new XElement("student",
-                    new XAttribute("name", data.Owner),
-                    new XAttribute("dirr", data.Dir),
-                    new XElement("points")));
-                XElement points = null;
-                foreach (var student in _students.Elements("student"))
-                {
-                    if (student.Attribute("name")?.Value == data.Owner)
-                    {
-                        points = student?.Element("points");
-                    }
-                }
-                
-                if (points == null)
-                {
-                    throw new Exception("DATA_LOAD_ERROR");
-                }
-
-                foreach (var plan in data.PlanDictionary)
-                {
-                    points.Add(new XElement("point",
-                        new XAttribute("name", plan.Key),
-                        new XAttribute("date", plan.Value)));
-                }
-
+                return null;
             }
-            catch (Exception e)
+
+            if (TryFind(data.Owner))
             {
-                throw new Exception(e.Message, e.InnerException);
+                return "Данный слушатель уже существует: " + data.Owner + " файл: " + data.Dir;
+            }
+
+            _students.Add(new XElement("student",
+                new XAttribute("name", data.Owner),
+                new XAttribute("dirr", data.Dir),
+                new XElement("points")));
+            XElement points = null;
+            foreach (var student in _students.Elements("student"))
+            {
+                if (student.Attribute("name")?.Value == data.Owner)
+                {
+                    points = student.Element("points");
+                }
+            }
+
+            foreach (var plan in data.PlanDictionary)
+            {
+                points?.Add(new XElement("point",
+                    new XAttribute("name", plan.Key),
+                    new XAttribute("date", plan.Value.Date.ToString("dd.MM.yyyy", CultureInfo.InvariantCulture))));
             }
             _storage.Save(_storageName);
-            return "SUCCES";
+            return "Слушатель " + data.Owner + " успешно добавлен. Файл: " + data.Dir;
+        }
+
+        public override List<DataUnit> GetDataList()
+        {
+            List<DataUnit> rezList = new List<DataUnit>();
+            foreach (var student in _students.Elements("student"))
+            {
+                DataUnit data = new DataUnit();
+                data.Owner = student.Attribute("name")?.Value;
+                foreach (var point in student.Element("points").Elements("point"))
+                {
+                    string key = point.Attribute("name")?.Value;
+                    if (key == null)
+                    {
+                        continue;
+                    }
+                    string value = point.Attribute("date")?.Value;
+                    try
+                    {
+                        data.AddToPlan(key, value);
+                    }
+                    catch (Exception e)
+                    {
+                        throw new Exception(e.Message,e.InnerException);
+                    }
+                    
+                }
+                rezList.Add(data);
+            }
+
+            return rezList;
         }
 
         public override DataUnit FindByName(string name)
@@ -123,26 +172,20 @@ namespace AnalisWordLib
             }
             return false;
         }
-
-        private bool CheckData(DataUnit data)
-        {
-            return true;
-        }
     } // Класс для хранения данных в xml
 
     public sealed class Model // Фасад модуля описывает логику взаимодействя классов и предоставляет методы для внешних модулей
     {
         private static ConfClass _config;
-        private static AnalisDocument _analis;
-        private static DataStorage _storage;
-        private const string NullDataError = "NULL_DATA";
+        private static AnalisDocument<DataUnit> _analis;
+        private static DataStorage<DataUnit> _storage;
 
         public Model(string header, string storageType)
         {
             try
             {
                 _config = new Configuration(header, storageType);
-                if (_config.GetStorage() == "XML")
+                if (_config.GetStorageType() == "XML")
                 {
                     _storage = new XmlStorage("ModelStorage.xml");
                 }
@@ -158,27 +201,30 @@ namespace AnalisWordLib
             var reg = new Regex(@".\w+$");
             var match = reg.Match(document);
             var extension = match.Value;
-            if (extension == ".doc")
+            if (extension == ".doc" || extension == ".docx")
             {
                 _analis = new AnalisDoc(_config.GetHeader());
-                try
-                {
-                    DataUnit data = _analis.Parse(document);
-                    if (data.IsNull())
-                    {
-                        throw new Exception(NullDataError);
-                    }
-
-                    Console.WriteLine(_storage.TryAdd(data));
-
-                }
-                catch (Exception e)
-                {
-                    throw new Exception(e.Message, e.InnerException);
-                }
+                DataUnit data = _analis.Parse(document);
                 
-                
+                if (data.IsNull())
+                {
+                    throw new Exception("NULL_DATA");
+                }
+
+                string rez = _storage.TryAdd(data);
+                if (rez == null)
+                {
+                    throw new Exception("CANT_ADD");
+                }
+                Console.WriteLine(rez);
+
             }
+        }
+
+        public List<DataUnit> GetList()
+        {
+            var dataList = _storage.GetDataList();
+            return dataList;
         }
     }
 
@@ -186,8 +232,8 @@ namespace AnalisWordLib
     {
         public abstract void SetHeader(string header);
         public abstract string GetHeader();
-        public abstract void SetStorage(string storageType);
-        public abstract string GetStorage();
+        public abstract void SetStorageType(string storageType);
+        public abstract string GetStorageType();
 
     }
 
@@ -216,7 +262,7 @@ namespace AnalisWordLib
             return _header;
         }
 
-        public override void SetStorage(string storageType)
+        public override void SetStorageType(string storageType)
         {
             if (storageType != "XML" && storageType != "DB")
             {
@@ -225,36 +271,29 @@ namespace AnalisWordLib
             _storageType = storageType;
         }
 
-        public override string GetStorage()
+        public override string GetStorageType()
         {
             return _storageType;
         }
     } // Класс с параметрами работы приложения
 
-    public abstract class AnalisDocument // Абстрактный класс объединяющий алгоритмы анализа план-графиков
+    public abstract class AnalisDocument<T> // Абстрактный класс объединяющий алгоритмы анализа план-графиков
     {
-        public abstract DataUnit Parse(string document);
+        public abstract T Parse(string document);
     }
 
-    public sealed class AnalisDoc : AnalisDocument
+    public sealed class AnalisDoc : AnalisDocument<DataUnit>
     {
         private static Word.Application _wordApp;
         private static Word.Document _wordDocument;
         private static DataUnit _data;
         private static string _header;
-        public const string FormatError = "WRONG_FORMAT";
-        public const string AnalisError = "CANT_ANALIS";
-        public const string OpenError = "CANT_OPEN";
 
         public AnalisDoc(string header)
         {
             _wordApp = new Word.Application { Visible = false };
             _wordDocument = new Word.Document();
-            if (header == string.Empty)
-            {
-                _header = "ПЛАН-ГРАФИК";
-            }
-            else _header = header;
+            _header = header == string.Empty ? "ПЛАН-ГРАФИК" : header;
 
             _data = new DataUnit();
         }
@@ -267,29 +306,11 @@ namespace AnalisWordLib
                 //Открываем ворд файл
                 OpenWord(document);
                 //Извлекаем нужные поля
-                AnaliticWord();
+                AnaliticWord();           
             }
-            catch (Exception e)
+            catch (Exception)
             {
-                switch (e.Message)
-                {
-                    case OpenError:
-                    {
-                        throw new Exception(OpenError);
-                    }
-                    case AnalisError:
-                    {
-                        throw new Exception(AnalisError);
-                    }
-                    case FormatError:
-                    {
-                        throw new Exception(FormatError);
-                    }
-                    default:
-                    {
-                        throw new Exception(e.Message, e.InnerException);
-                    }
-                }
+                // ignored
             }
             finally
             {
@@ -332,7 +353,7 @@ namespace AnalisWordLib
             }
             catch (Exception ex)
             {
-                throw new Exception(OpenError, ex.InnerException);
+                throw new Exception(ex.Message, ex.InnerException);
             }
         }
 
@@ -365,31 +386,30 @@ namespace AnalisWordLib
 
         private static void AnaliticWord()
         {
-            try
+            var counter = 0;
+            Stack<string> jobs = new Stack<string>();
+            Stack<string> dates = new Stack<string>();
+            for (var i = 1; i < _wordDocument.Paragraphs.Count; i++)
             {
-                var counter = 0;
-                Stack<string> jobs = new Stack<string>();
-                Stack<string> dates = new Stack<string>();
-                for (var i = 1; i < _wordDocument.Paragraphs.Count; i++)
+                var s = _wordDocument.Paragraphs[i].Range;
+
+                var rez = CheckText(s, ref counter, ref jobs, ref dates);
+
+                if (rez < -1)
                 {
-                    var s = _wordDocument.Paragraphs[i].Range;
-
-                    var rez = CheckText(s, ref counter, ref jobs, ref dates);
-
-                    if (rez < -1)
-                    {
-                        throw new Exception(FormatError);
-                    }
-                }
-
-                for (int i = 0; i < jobs.Count; i++)
-                {
-                    _data.PlanDictionary.Add(jobs.ToArray()[i], dates.ToArray()[i]);
+                    return;
                 }
             }
-            catch (Exception ex)
+
+            for (int i = 0; i < jobs.Count; i++)
             {
-                throw new Exception(AnalisError, ex.InnerException);
+                if (!_data.AddToPlan(jobs.ToArray()[i], dates.ToArray()[i]))
+                {
+                    _data.Owner = string.Empty;
+                    throw new Exception();
+                }
+                
+
             }
         }
 
@@ -437,7 +457,7 @@ namespace AnalisWordLib
                                     jobs.Push(s.Remove(s.Length - 2, 2));
                                 }
                                 else
-                                {
+                                {                                    
                                     dates.Push(s.Remove(s.Length - 2, 2));
                                 }
                             }

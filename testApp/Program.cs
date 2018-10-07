@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
+using System.Linq;
 using AnalisWordLib;
 
 namespace testApp
@@ -14,14 +16,15 @@ namespace testApp
             DataUnit unit = new DataUnit();
             Console.WriteLine("Start.");
             stopwatch.Start();
-            List<string> Docs = new List<string>();
-            Docs.Add("D:\\test\\План-график Козуб.doc");
-            Docs.Add("D:\\test\\План-график Коз.doc");
-            Docs.Add("D:\\test\\План-график Поляков.doc");
-            Docs.Add("D:\\test\\План-график Козуб.doc");
-            Docs.Add("D:\\test\\Word.doc");
+            List<string> docs = new List<string>();
+            docs.Add("D:\\test\\План-график Козуб.docx");
+            docs.Add("D:\\test\\План-график Коз.doc");
+            docs.Add("D:\\test\\План-график Поляков.doc");
+            docs.Add("D:\\test\\План-график Козуб.doc");
+            docs.Add("D:\\test\\Plan-grafik_na_5_semestr.doc");
+            docs.Add("D:\\test\\Not plan.docx");
             Model newModel = new Model(String.Empty, "XML");
-            foreach (var doc in Docs)
+            foreach (var doc in docs)
             {
                 try
                 {
@@ -30,13 +33,42 @@ namespace testApp
                 }
                 catch (Exception e)
                 {
-                    Console.WriteLine(e);
+                    switch (e.Message)
+                    {
+                        case "NULL_DATA":
+                        {
+                            Console.WriteLine("Проблемы с чтением файла " + doc + " возможно неверный формат.");
+                            break;
+                        }
+                        case "CANT_ADD":
+                        {
+                            Console.WriteLine("Проблемы записью файла " + doc + " возможно ошибка в xml файле.");
+                            break;
+                        }
+                        default:
+                        {
+                            Console.WriteLine(e);
+                            break;
+                        }
+                    }
+                    
                 }
             }
                      
             stopwatch.Stop();
-            Console.WriteLine(unit.Owner);
             Console.WriteLine("End. Total time: " + stopwatch.Elapsed);
+
+            List<DataUnit> list = newModel.GetList();
+            foreach (var dataUnit in list)
+            {
+                Console.WriteLine(dataUnit.Owner);
+                var dict = dataUnit.PlanDictionary.OrderBy(pair => pair.Value).ToDictionary(pair => pair.Key, pair => pair.Value);
+                foreach (var point in dict)
+                {
+                    Console.WriteLine(point.Key + " " + point.Value.ToString("dd.MM.yyyy", CultureInfo.InvariantCulture));
+                }
+            }
+            
             Console.ReadKey();
         }
     }
