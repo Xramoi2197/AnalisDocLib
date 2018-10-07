@@ -1,12 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
+using System.Xml;
+using System.Xml.Linq;
 using Word = Microsoft.Office.Interop.Word;
 
 namespace AnalisWordLib
 {
-
-
     public sealed class DataUnit //Класс описывающий формат данных план-графика
     {
         public string Dir { set; get; }
@@ -27,18 +27,101 @@ namespace AnalisWordLib
         }
     }
 
-
     public abstract class DataStorage // Абстрактный класс для описания хранилища данных xml/DB
     {
         public abstract string TryAdd(DataUnit data);
-        
+        public abstract DataUnit FindByName(string name);
     }
 
     public sealed class XmlStorage : DataStorage
     {
+        private readonly XDocument _storage;
+        private readonly XElement _students;
+        private readonly string _storageName;
+
+        public XmlStorage(string storageName)
+        {
+            try
+            {
+                _storageName = storageName;
+                _storage = XDocument.Load(_storageName);
+                _students = _storage.Element("students");
+            }
+            catch (Exception e)
+            {
+                throw new Exception("CANT_OPEN_STORAGE", e.InnerException);
+            }           
+        }
+
         public override string TryAdd(DataUnit data)
         {
-            throw new NotImplementedException();
+            try
+            {
+                if (_students == null)
+                {
+                    throw new Exception("STORAGE_IS_NULL");
+                }
+
+                if (TryFind(data.Owner))
+                {
+                    return "Данный слушатель уже существует: " + data.Owner + " Dirr: " + data.Dir;
+                }
+
+                if (CheckData(data) == false)
+                {
+                    return "Неверный формат данных слушателя: " + data.Owner + " Dirr: " + data.Dir;
+                }
+
+
+                _students.Add(new XElement("student",
+                    new XAttribute("name", data.Owner),
+                    new XAttribute("dirr", data.Dir),
+                    new XElement("points")));
+                XElement points = null;
+                foreach (var student in _students.Elements("student"))
+                {
+                    if (student.Attribute("name")?.Value == data.Owner)
+                    {
+                        points = student?.Element("points");
+                    }
+                }
+                
+                if (points == null)
+                {
+                    throw new Exception("DATA_LOAD_ERROR");
+                }
+
+                foreach (var plan in data.PlanDictionary)
+                {
+                    points.Add(new XElement("point",
+                        new XAttribute("name", plan.Key),
+                        new XAttribute("date", plan.Value)));
+                }
+
+            }
+            catch (Exception e)
+            {
+                throw new Exception(e.Message, e.InnerException);
+            }
+            _storage.Save(_storageName);
+            return "SUCCES";
+        }
+
+        public override DataUnit FindByName(string name)
+        {
+            return null;
+        }
+
+        public bool TryFind(string name)
+        {
+            foreach (var student in _students.Elements("student"))
+            {
+                if (student.Attribute("name")?.Value == name)
+                {
+                    return true;
+                }
+            }
+            return false;
         }
 
         private bool CheckData(DataUnit data)
@@ -52,7 +135,7 @@ namespace AnalisWordLib
         private static ConfClass _config;
         private static AnalisDocument _analis;
         private static DataStorage _storage;
-        private const string DataError = "NULL_DATA";
+        private const string NullDataError = "NULL_DATA";
 
         public Model(string header, string storageType)
         {
@@ -61,7 +144,7 @@ namespace AnalisWordLib
                 _config = new Configuration(header, storageType);
                 if (_config.GetStorage() == "XML")
                 {
-                    _storage = new XmlStorage();
+                    _storage = new XmlStorage("ModelStorage.xml");
                 }
             }
             catch (Exception e)
@@ -83,8 +166,11 @@ namespace AnalisWordLib
                     DataUnit data = _analis.Parse(document);
                     if (data.IsNull())
                     {
-                        throw new Exception(DataError);
+                        throw new Exception(NullDataError);
                     }
+
+                    Console.WriteLine(_storage.TryAdd(data));
+
                 }
                 catch (Exception e)
                 {
@@ -177,6 +263,7 @@ namespace AnalisWordLib
         {
             try
             {
+                _data.Dir = document;
                 //Открываем ворд файл
                 OpenWord(document);
                 //Извлекаем нужные поля
