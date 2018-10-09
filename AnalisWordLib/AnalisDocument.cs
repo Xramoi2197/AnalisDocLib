@@ -1,8 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Xml.Linq;
 using Word = Microsoft.Office.Interop.Word;
 
@@ -154,8 +156,7 @@ namespace AnalisWordLib
             List<DataUnit> rezList = new List<DataUnit>();
             foreach (var student in _students.Elements("student"))
             {
-                DataUnit data = new DataUnit();
-                data.Owner = student.Attribute("name")?.Value;
+                DataUnit data = new DataUnit {Owner = student.Attribute("name")?.Value};
                 // ReSharper disable once PossibleNullReferenceException
                 foreach (XElement point in student.Element("points")?.Elements("point"))
                 {
@@ -283,7 +284,7 @@ namespace AnalisWordLib
             {
                 return false;
             }
-            bool rez = DateTime.TryParseExact(date, pattern, new CultureInfo("en-US"), DateTimeStyles.None, out var dateTime);
+            bool rez = DateTime.TryParseExact(date, pattern, new CultureInfo("en-US"), DateTimeStyles.None, out _);
             if (!rez)
             {
                 return false;
@@ -305,6 +306,7 @@ namespace AnalisWordLib
 
                     if (point.Attribute("check")?.Value != null)
                     {
+                        // ReSharper disable once PossibleNullReferenceException
                         point.Attribute("check").Value = date;
                         _storage.Save(_storageName);
                         return true;
@@ -339,7 +341,7 @@ namespace AnalisWordLib
                         continue;
                     }
 
-                    point.Attribute("check").Remove();
+                    point.Attribute("check")?.Remove();
                     _storage.Save(_storageName);
                     return true;
                 }
@@ -363,14 +365,14 @@ namespace AnalisWordLib
     public sealed class Model // Фасад модуля описывает логику взаимодействя классов и предоставляет методы для внешних модулей
     {
         private static ConfClass _config; // Класс конфигурации приложения
-        private static AnalisDocument<DataUnit> _analis; // Класc метода анализа план-графиков
+        //private static AnalisDocument<DataUnit> _analis; // Класc метода анализа план-графиков
         private static DataStorage<DataUnit> _storage; // Класс для хранения данных
 
-        public Model(string header, string storageType) // Задаем модель header - заголовок план-графика, storageType - XML/DB
+        public Model(string header, string storageType, string defDirr) // Задаем модель header - заголовок план-графика, storageType - XML/DB
         {
             try
             {
-                _config = new Configuration(header, storageType);
+                _config = new Configuration(header, storageType, defDirr);
                 if (_config.GetStorageType() == "XML")
                 {
                     _storage = new XmlStorage("ModelStorage.xml");
@@ -382,16 +384,29 @@ namespace AnalisWordLib
             }               
         }
 
+        public List<string> ParseDir(string dirrectory)
+        {
+            string[] documents = Directory.GetFiles(_config.GetDefDirr(), "*.doc?");
+            List<string> rez = new List<string>();
+            foreach (string doc in documents)
+            {
+                rez.Add(ParseDoc(doc));
+            }
+
+            return rez;
+        }
+
         public string ParseDoc(string document) // Анализ одного документа
         {
+            AnalisDocument<DataUnit> analis;
             string rez = null;
             var reg = new Regex(@".\w+$");
             var match = reg.Match(document);
             var extension = match.Value;
             if (extension == ".doc" || extension == ".docx") // Выбор метода в зависимости от расширения
             {
-                _analis = new AnalisDoc(_config.GetHeader());
-                DataUnit data = _analis.Parse(document);
+                analis = new AnalisDoc(_config.GetHeader());
+                DataUnit data = analis.Parse(document);
                 
                 if (data.IsNull()) // Исключение, если метод для анализа вернул пустой объект
                 {
@@ -494,15 +509,18 @@ namespace AnalisWordLib
         public abstract string GetHeader();
         public abstract void SetStorageType(string storageType);
         public abstract string GetStorageType();
+        public abstract void SetDefDirr(string dirrectory);
+        public abstract string GetDefDirr();
 
     }
 
     public sealed class Configuration : ConfClass
     {
-        private static string _header;
-        private static string _storageType;
+        private string _header;
+        private string _storageType;
+        private string _defaultDirrectory;
 
-        public Configuration(string header, string storageType)
+        public Configuration(string header, string storageType, string defaultDirrectory)
         {
             _header = header;
             if (storageType != "XML" && storageType != "DB")
@@ -510,6 +528,7 @@ namespace AnalisWordLib
                 throw new Exception("WRONG_STORAGE_TYPE");
             }
             _storageType = storageType;
+            _defaultDirrectory = defaultDirrectory;
         }
 
         public override void SetHeader(string header)
@@ -534,6 +553,16 @@ namespace AnalisWordLib
         public override string GetStorageType()
         {
             return _storageType;
+        }
+
+        public override void SetDefDirr(string dirrectory)
+        {
+            _defaultDirrectory = dirrectory;
+        }
+
+        public override string GetDefDirr()
+        {
+            return _defaultDirrectory;
         }
     } // Класс с параметрами работы приложения
 

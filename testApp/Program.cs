@@ -10,21 +10,27 @@ namespace testApp
 
         static void Main()
         {
-            Model newModel = new Model(string.Empty, "XML");
+            Model newModel = new Model(string.Empty, "XML", "D:\\test\\");
             while (true)
             {
                 Console.WriteLine("Menu:");
-                Console.WriteLine("1.Add test to xml");
-                Console.WriteLine("2.Print data from xml");
-                Console.WriteLine("3.Get students");
-                Console.WriteLine("4.Find by name");
-                Console.WriteLine("5.Delete by name");
-                Console.WriteLine("6.Delete all");
-                Console.WriteLine("7.Set check");
-                Console.WriteLine("8.Remove check");
+                Console.WriteLine("1.Add dirr to xml");
+                Console.WriteLine("2.Add doc to xml");
+                Console.WriteLine();
+                Console.WriteLine("3.Print data from xml");
+                Console.WriteLine("4.Get students");
+                Console.WriteLine("5.Find by name");
+                Console.WriteLine();
+                Console.WriteLine("6.Set check");
+                Console.WriteLine("7.Remove check");
+                Console.WriteLine();
+                Console.WriteLine("9.Delete by name");
+                Console.WriteLine("0.Delete all");
+                Console.WriteLine();
                 Console.WriteLine("enter - Exit");
                 Console.Write("Input:");
                 var userInput = Console.ReadLine();
+                Console.WriteLine();
                 Stopwatch stopwatch;
                 switch (userInput)
                 {
@@ -32,21 +38,19 @@ namespace testApp
                     {
                         stopwatch = new Stopwatch();
                         Console.WriteLine("Start.");
+                        Console.Write("Add dirrectory path: ");
+                        var dirr = Console.ReadLine();
+                        if (dirr == null)
+                        {
+                            dirr = "D:\\test\\";
+                        }
                         stopwatch.Start();
                         List<string> docs = new List<string>();
-                        docs.Add("D:\\test\\План-график Козуб.docx");
-                        docs.Add("D:\\test\\План-график Коз.doc");
-                        docs.Add("D:\\test\\План-график Поляков.doc");
-                        docs.Add("D:\\test\\План-график Козуб.doc");
-                        docs.Add("D:\\test\\Plan-grafik_na_5_semestr.doc");
-                        docs.Add("D:\\test\\Not plan.docx");
-                        
-                        foreach (var doc in docs)
+                        List<string> rezList = newModel.ParseDir(dirr);
+                        foreach (var rez in rezList)
                         {
-                            string rez = newModel.ParseDoc(doc);
                             Console.WriteLine(rez);
                         }
-
                         stopwatch.Stop();
                         Console.WriteLine("End. Total time: " + stopwatch.Elapsed);
                         Console.ReadKey();
@@ -54,6 +58,24 @@ namespace testApp
                             continue;
                     }
                     case "2":
+                    {
+                        stopwatch = new Stopwatch();
+                        Console.WriteLine("Start.");
+                        Console.Write("Add document name: ");
+                        var doc = Console.ReadLine();
+                        if (doc == null)
+                        {
+                            doc = "D:\\test\\План-график Козуб.doc";
+                        }
+                        stopwatch.Start();
+                        Console.WriteLine(newModel.ParseDoc(doc));
+                        stopwatch.Stop();
+                        Console.WriteLine("End. Total time: " + stopwatch.Elapsed);
+                        Console.ReadKey();
+                        Console.Clear();
+                        continue;
+                    }
+                    case "3":
                     {
                         stopwatch = new Stopwatch();
                         stopwatch.Start();
@@ -68,7 +90,7 @@ namespace testApp
                         Console.Clear();
                             continue;
                     }
-                    case "3":
+                    case "4":
                     {
                         stopwatch = new Stopwatch();
                         stopwatch.Start();
@@ -77,13 +99,14 @@ namespace testApp
                         {
                             Console.WriteLine(stud);   
                         }
+                        Console.WriteLine("Всего план-графиков записано: " + studList.Count);
                         stopwatch.Stop();
                         Console.WriteLine("Time: " + stopwatch.Elapsed);
                         Console.ReadKey();
                         Console.Clear();
                             continue;
                     }
-                    case "4":
+                    case "5":
                     {
                         stopwatch = new Stopwatch();
                         Console.Write("Add name: ");
@@ -104,7 +127,7 @@ namespace testApp
                         Console.Clear();
                             continue;
                     }
-                    case "5":
+                    case "9":
                     {
                         stopwatch = new Stopwatch();
                         Console.Write("Add name: ");
@@ -117,7 +140,7 @@ namespace testApp
                         Console.Clear();
                         continue;
                     }
-                    case "6":
+                    case "0":
                     {
                         stopwatch = new Stopwatch();
                         stopwatch.Start();
@@ -128,7 +151,7 @@ namespace testApp
                         Console.Clear();
                         continue;
                     }
-                    case "7":
+                    case "6":
                     {
                         stopwatch = new Stopwatch();
                         Console.Write("Add name: ");
@@ -145,7 +168,7 @@ namespace testApp
                         Console.Clear();
                         continue;
                     }
-                    case "8":
+                    case "7":
                     {
                         stopwatch = new Stopwatch();
                         Console.Write("Add name: ");
