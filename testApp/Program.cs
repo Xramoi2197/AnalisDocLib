@@ -10,9 +10,7 @@ namespace testApp
 
         static void Main()
         {
-            Stopwatch stopwatch = new Stopwatch();
-            DataUnit unit = new DataUnit();
-            Model newModel = new Model(String.Empty, "XML");
+            Model newModel = new Model(string.Empty, "XML");
             while (true)
             {
                 Console.WriteLine("Menu:");
@@ -20,13 +18,19 @@ namespace testApp
                 Console.WriteLine("2.Print data from xml");
                 Console.WriteLine("3.Get students");
                 Console.WriteLine("4.Find by name");
+                Console.WriteLine("5.Delete by name");
+                Console.WriteLine("6.Delete all");
+                Console.WriteLine("7.Set check");
+                Console.WriteLine("8.Remove check");
                 Console.WriteLine("enter - Exit");
                 Console.Write("Input:");
                 var userInput = Console.ReadLine();
+                Stopwatch stopwatch;
                 switch (userInput)
                 {
                     case "1":
                     {
+                        stopwatch = new Stopwatch();
                         Console.WriteLine("Start.");
                         stopwatch.Start();
                         List<string> docs = new List<string>();
@@ -39,34 +43,8 @@ namespace testApp
                         
                         foreach (var doc in docs)
                         {
-                            try
-                            {
-
-                                string rez = newModel.ParseDoc(doc);
-                                Console.WriteLine(rez);
-                            }
-                            catch (Exception e)
-                            {
-                                switch (e.Message)
-                                {
-                                    case "NULL_DATA":
-                                    {
-                                        Console.WriteLine("Проблемы с чтением файла " + doc + " возможно неверный формат.");
-                                        break;
-                                    }
-                                    case "CANT_ADD":
-                                    {
-                                        Console.WriteLine("Проблемы записью файла " + doc + " возможно ошибка в xml файле.");
-                                        break;
-                                    }
-                                    default:
-                                    {
-                                        Console.WriteLine(e);
-                                        break;
-                                    }
-                                }
-
-                            }
+                            string rez = newModel.ParseDoc(doc);
+                            Console.WriteLine(rez);
                         }
 
                         stopwatch.Stop();
@@ -77,6 +55,7 @@ namespace testApp
                     }
                     case "2":
                     {
+                        stopwatch = new Stopwatch();
                         stopwatch.Start();
                         List<DataUnit> list = newModel.GetList();
                         foreach (var dataUnit in list)
@@ -91,6 +70,7 @@ namespace testApp
                     }
                     case "3":
                     {
+                        stopwatch = new Stopwatch();
                         stopwatch.Start();
                         List<string> studList = newModel.GetStudentsFromStorage();
                         foreach (var stud in studList)
@@ -105,6 +85,7 @@ namespace testApp
                     }
                     case "4":
                     {
+                        stopwatch = new Stopwatch();
                         Console.Write("Add name: ");
                         var name = Console.ReadLine();
                         stopwatch.Start();
@@ -123,6 +104,62 @@ namespace testApp
                         Console.Clear();
                             continue;
                     }
+                    case "5":
+                    {
+                        stopwatch = new Stopwatch();
+                        Console.Write("Add name: ");
+                        var name = Console.ReadLine();
+                        stopwatch.Start();
+                        Console.WriteLine(newModel.DeleteStudent(name));
+                        stopwatch.Stop();
+                        Console.WriteLine("Time: " + stopwatch.Elapsed);
+                        Console.ReadKey();
+                        Console.Clear();
+                        continue;
+                    }
+                    case "6":
+                    {
+                        stopwatch = new Stopwatch();
+                        stopwatch.Start();
+                        Console.WriteLine(newModel.DeleteAll());
+                        stopwatch.Stop();
+                        Console.WriteLine("Time: " + stopwatch.Elapsed);
+                        Console.ReadKey();
+                        Console.Clear();
+                        continue;
+                    }
+                    case "7":
+                    {
+                        stopwatch = new Stopwatch();
+                        Console.Write("Add name: ");
+                        var name = Console.ReadLine();
+                        Console.Write("Add point: ");
+                        var point = Console.ReadLine();
+                        Console.Write("Add date: ");
+                        var date = Console.ReadLine();
+                        stopwatch.Start();
+                        Console.WriteLine(newModel.SetCheck(name, point, date));
+                        stopwatch.Stop();
+                        Console.WriteLine("Time: " + stopwatch.Elapsed);
+                        Console.ReadKey();
+                        Console.Clear();
+                        continue;
+                    }
+                    case "8":
+                    {
+                        stopwatch = new Stopwatch();
+                        Console.Write("Add name: ");
+                        var name = Console.ReadLine();
+                        Console.Write("Add point: ");
+                        var point = Console.ReadLine();
+                        stopwatch.Start();
+                        Console.WriteLine(newModel.DeleteCheck(name, point));
+                        stopwatch.Stop();
+                        Console.WriteLine("Time: " + stopwatch.Elapsed);
+                        Console.ReadKey();
+                        Console.Clear();
+                        continue;
+                    }
                     case "":
                     {
                         return;
@@ -130,6 +167,7 @@ namespace testApp
                     default:
                     {
                         Console.WriteLine("Wrong input");
+                        Console.ReadKey();
                         Console.Clear();
                         continue;
                     }

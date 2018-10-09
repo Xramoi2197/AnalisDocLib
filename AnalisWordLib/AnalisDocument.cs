@@ -12,12 +12,14 @@ namespace AnalisWordLib
     {
         public string Dir { set; get; } // Файл, из которого был загружен план-график
         public Dictionary<string, DateTime> PlanDictionary { set; get; } // План-график в словаре: ключ - название точки, значение - дата
+        public Dictionary<string, DateTime> CheckDictionary { set; get; }
         public string Owner { set; get; } // Фамилия И.О. слушателя
 
         public DataUnit() // Конструктор без параметров, выделение памяти под поля
         {
             Dir = string.Empty;
             PlanDictionary = new Dictionary<string, DateTime>();
+            CheckDictionary = new Dictionary<string, DateTime>();
             Owner = string.Empty;
         }
 
@@ -27,19 +29,7 @@ namespace AnalisWordLib
             return false;
         }
 
-        public static bool IsValidName(string name) // Проверка ФИО на валидность
-        {
-            const string namePattern = @"^[А-Я][a-я]+\s[А-Я]\.[А-Я]\.$";
-            var reg = new Regex(namePattern);
-            var match = reg.Match(name);
-            if (!match.Success)
-            {
-                return false;
-            }
-            return true;
-        }
-
-        public bool AddToPlan(string name, string date) // Добавление контрольной точки в словарь с преобразованием строки в дату
+        public bool AddToDictionary(string name, string date, Dictionary<string, DateTime> dictionary) // Добавление контрольной точки в словарь с преобразованием строки в дату
         {
             string pattern = "dd.MM.yyyy";
             if (date.Length == 9)
@@ -52,11 +42,16 @@ namespace AnalisWordLib
                 pattern = "dd.MM.yy";
             }
 
-            CultureInfo enUs = new CultureInfo("en-US");
+            if (date.Length == 7)
+            {
+                date = "0" + date;
+                pattern = "dd.MM.yy";
+            }
+
             bool rez = DateTime.TryParseExact(date, pattern, new CultureInfo("en-US"), DateTimeStyles.None, out var dateTime); // если false, то формат даты неверный
             if (rez)
             {
-                PlanDictionary.Add(name, dateTime);
+                dictionary.Add(name, dateTime);
             }
 
             return rez;
@@ -70,6 +65,11 @@ namespace AnalisWordLib
             foreach (var point in dict)
             {
                 rezult += point.Key + " " + point.Value.ToString("dd.MM.yyyy", CultureInfo.InvariantCulture);
+                if (CheckDictionary.ContainsKey(point.Key))
+                {
+                    rezult += " " + CheckDictionary[point.Key].ToString("dd.MM.yyyy", CultureInfo.InvariantCulture);
+                }
+                
                 if (count != 1)
                 {
                     rezult += "\r\n";
@@ -87,6 +87,11 @@ namespace AnalisWordLib
         public abstract List<T> GetDataList();
         public abstract T FindByName(string name);
         public abstract List<string> GetStudents();
+        public abstract bool DeleteData(string name);
+        public abstract void DeleteAll();
+        public abstract int Count();
+        public abstract bool SetCheck(string name, string key, string date);
+        public abstract bool DeleteCheck(string name, string key);
     }
 
     public sealed class XmlStorage : DataStorage<DataUnit>
@@ -151,7 +156,8 @@ namespace AnalisWordLib
             {
                 DataUnit data = new DataUnit();
                 data.Owner = student.Attribute("name")?.Value;
-                foreach (var point in student.Element("points").Elements("point"))
+                // ReSharper disable once PossibleNullReferenceException
+                foreach (XElement point in student.Element("points")?.Elements("point"))
                 {
                     string key = point.Attribute("name")?.Value;
                     if (key == null)
@@ -159,15 +165,13 @@ namespace AnalisWordLib
                         continue;
                     }
                     string value = point.Attribute("date")?.Value;
-                    try
+                    data.AddToDictionary(key, value, data.PlanDictionary);
+                    string check = point.Attribute("check")?.Value;
+                    if (check != null)
                     {
-                        data.AddToPlan(key, value);
+                        data.AddToDictionary(key, check, data.CheckDictionary);
                     }
-                    catch (Exception e)
-                    {
-                        throw new Exception(e.Message,e.InnerException);
-                    }
-                    
+
                 }
                 rezList.Add(data);
             }
@@ -185,7 +189,8 @@ namespace AnalisWordLib
                     continue;
                 }
                 data.Owner = student.Attribute("name")?.Value;
-                foreach (var point in student.Element("points").Elements("point"))
+                // ReSharper disable once PossibleNullReferenceException
+                foreach (XElement point in student.Element("points")?.Elements("point"))
                 {
                     string key = point.Attribute("name")?.Value;
                     if (key == null)
@@ -193,14 +198,12 @@ namespace AnalisWordLib
                         continue;
                     }
                     string value = point.Attribute("date")?.Value;
-                    try
+                    data.AddToDictionary(key, value, data.PlanDictionary);
+                    string check = point.Attribute("check")?.Value;
+                    if (check != null)
                     {
-                        data.AddToPlan(key, value);
+                        data.AddToDictionary(key, check, data.CheckDictionary);
                     }
-                    catch (Exception e)
-                    {
-                        throw new Exception(e.Message, e.InnerException);
-                    }                    
                 }
                 return data;
             }
@@ -218,6 +221,130 @@ namespace AnalisWordLib
             }
 
             return rezList;
+        }
+
+        public override bool DeleteData(string name) // Удаление одного план-графика
+        {
+            XElement deleted = null;
+            foreach (var student in _students.Elements("student"))
+            {
+                if (name != student.Attribute("name")?.Value)
+                {
+                    continue;
+                }
+
+                deleted = student;
+                break;
+            }
+
+            if (deleted == null)
+            {
+                return false;
+            }
+            deleted.Remove();
+            _storage.Save(_storageName);
+            return true;
+        }
+
+        public override void DeleteAll()
+        {
+            _students.RemoveAll();
+            _storage.Save(_storageName);
+        }
+
+        public override int Count()
+        {
+            var count = _students.Elements("student").Count();
+            return count;
+        }
+
+        public override bool SetCheck(string name, string key, string date)
+        {
+            DataUnit data = FindByName(name);
+            string pattern = "dd.MM.yyyy";
+
+            if (date.Length == 9)
+            {
+                date = "0" + date;
+            }
+
+            if (date.Length == 8)
+            {
+                pattern = "dd.MM.yy";
+            }
+
+            if (date.Length == 7)
+            {
+                date = "0" + date;
+                pattern = "dd.MM.yy";
+            }
+
+            if (!data.PlanDictionary.ContainsKey(key))
+            {
+                return false;
+            }
+            bool rez = DateTime.TryParseExact(date, pattern, new CultureInfo("en-US"), DateTimeStyles.None, out var dateTime);
+            if (!rez)
+            {
+                return false;
+            }
+            foreach (var student in _students.Elements("student"))
+            {
+                if (name != student.Attribute("name")?.Value)
+                {
+                    continue;
+                }
+                // ReSharper disable once PossibleNullReferenceException
+                foreach (XElement point in student.Element("points")?.Elements("point"))
+                {
+                    string pointName = point.Attribute("name")?.Value;
+                    if (pointName != key)
+                    {
+                        continue;
+                    }
+
+                    if (point.Attribute("check")?.Value != null)
+                    {
+                        point.Attribute("check").Value = date;
+                        _storage.Save(_storageName);
+                        return true;
+                    }
+                    point.Add(new XAttribute("check", date));
+                    _storage.Save(_storageName);
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        public override bool DeleteCheck(string name, string key)
+        {
+            DataUnit data = FindByName(name);
+            if (!data.CheckDictionary.ContainsKey(key))
+            {
+                return false;
+            }
+            foreach (var student in _students.Elements("student"))
+            {
+                if (name != student.Attribute("name")?.Value)
+                {
+                    continue;
+                }
+                // ReSharper disable once PossibleNullReferenceException
+                foreach (XElement point in student.Element("points")?.Elements("point"))
+                {
+                    string pointName = point.Attribute("name")?.Value;
+                    if (pointName != key)
+                    {
+                        continue;
+                    }
+
+                    point.Attribute("check").Remove();
+                    _storage.Save(_storageName);
+                    return true;
+                }
+            }
+            return false;
         }
 
         public bool TryFind(string name) // Проверка существования слушателя в xml
@@ -268,7 +395,8 @@ namespace AnalisWordLib
                 
                 if (data.IsNull()) // Исключение, если метод для анализа вернул пустой объект
                 {
-                    throw new Exception("NULL_DATA");
+                    rez = "Проблемы с чтением файла " + document + " возможно неверный формат.";
+                    return  rez;
                 }
 
                 rez = _storage.TryAdd(data);
@@ -276,7 +404,7 @@ namespace AnalisWordLib
             }
             if (rez == null) //Если не удалось поместить в хранилище
             {
-                throw new Exception("CANT_ADD");
+                rez = "Проблемы записью файла " + document + " возможно ошибка в xml файле.";
             }
             return rez;
         }
@@ -297,6 +425,66 @@ namespace AnalisWordLib
         {
             var student = _storage.FindByName(name);
             return student;
+        }
+
+        public string DeleteStudent(string name)
+        {
+            string rez;
+            if (!_storage.DeleteData(name))
+            {
+                rez = "Данный слушатель " + name + " не найден.";
+            }
+            else
+            {
+                rez = "План-график слушателя " + name + " удален.";
+            }
+
+            return rez;
+        }
+
+        public string DeleteAll()
+        {
+            string rez;
+            if (_storage.Count() > 0)
+            {
+                _storage.DeleteAll();
+                rez = "Хранилище очищено.";
+                return rez;
+            }
+
+            rez = "Хранилище пусто";
+            return rez;
+        }
+
+        public string SetCheck(string name, string point, string date)
+        {
+            string rez;
+
+            if (!_storage.SetCheck(name, point, date))
+            {
+                rez = "Не удалось добавить отметку у " + name + " " + point + " " + date;
+            }
+            else
+            {
+                rez = "Слушатель " + name + " сдал " + point + " " + date;
+            }
+
+            return rez;
+        }
+
+        public string DeleteCheck(string name, string point)
+        {
+            string rez;
+            if (!_storage.DeleteCheck(name, point))
+            {
+                rez = "Не удалось удалить отметку о проверке у " + name + " в " + point;
+            }
+            else
+            {
+                rez = "Отметка о " + name + " о " + point + " удалена.";
+            }
+
+            return rez;
         }
     }
 
@@ -472,7 +660,7 @@ namespace AnalisWordLib
 
             for (int i = 0; i < jobs.Count; i++)
             {
-                if (!_data.AddToPlan(jobs.ToArray()[i], dates.ToArray()[i]))
+                if (!_data.AddToDictionary(jobs.ToArray()[i], dates.ToArray()[i], _data.PlanDictionary))
                 {
                     _data.Owner = string.Empty;
                     throw new Exception();
