@@ -4,7 +4,6 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
-using System.Threading;
 using System.Xml.Linq;
 using Word = Microsoft.Office.Interop.Word;
 
@@ -125,7 +124,7 @@ namespace AnalisWordLib
 
             if (TryFind(data.Owner)) // Проверяем на повтор слушателя в xml
             {
-                return "Данный слушатель уже существует: " + data.Owner + " файл: " + data.Dir;
+                return "Warning: Данный слушатель уже существует: " + data.Owner + " файл: " + data.Dir;
             }
             // Записываем данные в xml
             _students.Add(new XElement("student",
@@ -367,16 +366,16 @@ namespace AnalisWordLib
         private static ConfClass _config; // Класс конфигурации приложения
         //private static AnalisDocument<DataUnit> _analis; // Класc метода анализа план-графиков
         private static DataStorage<DataUnit> _storage; // Класс для хранения данных
+        public delegate void GetInfo(string rez, int current, int summ);
+        public delegate void GetReport(string rez);
+
 
         public Model(string header, string storageType, string defDirr) // Задаем модель header - заголовок план-графика, storageType - XML/DB
         {
             try
             {
                 _config = new Configuration(header, storageType, defDirr);
-                if (_config.GetStorageType() == "XML")
-                {
-                    _storage = new XmlStorage("ModelStorage.xml");
-                }
+                _storage = new XmlStorage("ModelStorage.xml");
             }
             catch (Exception e)
             {
@@ -384,33 +383,43 @@ namespace AnalisWordLib
             }               
         }
 
-        public List<string> ParseDir(string dirrectory)
+        public void ParseDir(string dirrectory, GetInfo getInfo)
         {
-            string[] documents = Directory.GetFiles(_config.GetDefDirr(), "*.doc?");
-            List<string> rez = new List<string>();
-            foreach (string doc in documents)
+            string[] documents;
+            if (dirrectory == string.Empty)
             {
-                rez.Add(ParseDoc(doc));
+                documents = Directory.GetFiles(_config.GetDefDirr(), "*.doc?");
+            }
+            else
+            {
+                documents = Directory.GetFiles(dirrectory, "*.doc?");
             }
 
-            return rez;
+            int max = documents.Length;
+            int curr = 0;
+            foreach (var doc in documents)
+            {
+                var rezStr = ParseDoc(doc);
+                curr++;
+                getInfo?.Invoke(rezStr, curr, max);
+            }
         }
 
-        public string ParseDoc(string document) // Анализ одного документа
+        public string ParseDoc(object document) // Анализ одного документа
         {
             AnalisDocument<DataUnit> analis;
             string rez = null;
             var reg = new Regex(@".\w+$");
-            var match = reg.Match(document);
+            var match = reg.Match((string)document);
             var extension = match.Value;
             if (extension == ".doc" || extension == ".docx") // Выбор метода в зависимости от расширения
             {
                 analis = new AnalisDoc(_config.GetHeader());
-                DataUnit data = analis.Parse(document);
-                
+                DataUnit data = analis.Parse((string)document);
+              
                 if (data.IsNull()) // Исключение, если метод для анализа вернул пустой объект
                 {
-                    rez = "Проблемы с чтением файла " + document + " возможно неверный формат.";
+                    rez = "Error: Проблемы с чтением файла " + document + " возможно неверный формат.";
                     return  rez;
                 }
 
@@ -419,8 +428,9 @@ namespace AnalisWordLib
             }
             if (rez == null) //Если не удалось поместить в хранилище
             {
-                rez = "Проблемы записью файла " + document + " возможно ошибка в xml файле.";
+                rez = "Error: Проблемы записью файла " + document + " возможно ошибка в xml файле.";
             }
+
             return rez;
         }
 
@@ -447,7 +457,7 @@ namespace AnalisWordLib
             string rez;
             if (!_storage.DeleteData(name))
             {
-                rez = "Данный слушатель " + name + " не найден.";
+                rez = "Warning: Данный слушатель " + name + " не найден.";
             }
             else
             {
@@ -467,7 +477,7 @@ namespace AnalisWordLib
                 return rez;
             }
 
-            rez = "Хранилище пусто";
+            rez = "Warning: Хранилище пусто";
             return rez;
         }
 
@@ -477,7 +487,7 @@ namespace AnalisWordLib
 
             if (!_storage.SetCheck(name, point, date))
             {
-                rez = "Не удалось добавить отметку у " + name + " " + point + " " + date;
+                rez = "Warning: Не удалось добавить отметку у " + name + " " + point + " " + date;
             }
             else
             {
@@ -492,7 +502,7 @@ namespace AnalisWordLib
             string rez;
             if (!_storage.DeleteCheck(name, point))
             {
-                rez = "Не удалось удалить отметку о проверке у " + name + " в " + point;
+                rez = "Warning: Не удалось удалить отметку о проверке у " + name + " в " + point;
             }
             else
             {
@@ -604,7 +614,7 @@ namespace AnalisWordLib
             finally
             {
                 //Закрываем объект Application
-                CloseWord();               
+                Close();               
             }
             return _data;
         }
@@ -643,7 +653,7 @@ namespace AnalisWordLib
             }
         }
 
-        private static void CloseWord() // Метод закрывает файл
+        public void Close() // Метод закрывает файл
         {
             if (_wordDocument != null)
             {

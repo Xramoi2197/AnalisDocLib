@@ -7,6 +7,37 @@ namespace testApp
 {
     class Program
     {
+        public static void PrintInConsole(string str, int curr, int max)
+        {
+            Console.ForegroundColor = ConsoleColor.Green;
+            if (str.ToCharArray()[0] == 'W')
+            {
+                Console.ForegroundColor = ConsoleColor.Yellow;
+            }
+            if (str.ToCharArray()[0] == 'E')
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+            }
+            
+            Console.WriteLine(curr + "\\" + max + " " + str);
+            Console.ResetColor();
+        }
+
+        public static void PrintReport(string str)
+        {
+            Console.ForegroundColor = ConsoleColor.Green;
+            if (str.ToCharArray()[0] == 'W')
+            {
+                Console.ForegroundColor = ConsoleColor.Yellow;
+            }
+            if (str.ToCharArray()[0] == 'E')
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+            }
+
+            Console.WriteLine(str);
+            Console.ResetColor();
+        }
 
         static void Main()
         {
@@ -40,17 +71,12 @@ namespace testApp
                         Console.WriteLine("Start.");
                         Console.Write("Add dirrectory path: ");
                         var dirr = Console.ReadLine();
-                        if (dirr == null)
+                        if (dirr == "")
                         {
                             dirr = "D:\\test\\";
                         }
                         stopwatch.Start();
-                        List<string> docs = new List<string>();
-                        List<string> rezList = newModel.ParseDir(dirr);
-                        foreach (var rez in rezList)
-                        {
-                            Console.WriteLine(rez);
-                        }
+                        newModel.ParseDir(dirr, PrintInConsole);
                         stopwatch.Stop();
                         Console.WriteLine("End. Total time: " + stopwatch.Elapsed);
                         Console.ReadKey();
@@ -63,12 +89,12 @@ namespace testApp
                         Console.WriteLine("Start.");
                         Console.Write("Add document name: ");
                         var doc = Console.ReadLine();
-                        if (doc == null)
+                        if (doc == "")
                         {
-                            doc = "D:\\test\\План-график Козуб.doc";
+                            doc = "D:\\test\\План-график Козуб.docx";
                         }
                         stopwatch.Start();
-                        Console.WriteLine(newModel.ParseDoc(doc));
+                        PrintReport(newModel.ParseDoc(doc));
                         stopwatch.Stop();
                         Console.WriteLine("End. Total time: " + stopwatch.Elapsed);
                         Console.ReadKey();
@@ -95,10 +121,12 @@ namespace testApp
                         stopwatch = new Stopwatch();
                         stopwatch.Start();
                         List<string> studList = newModel.GetStudentsFromStorage();
+                        Console.ForegroundColor = ConsoleColor.White;
                         foreach (var stud in studList)
                         {
                             Console.WriteLine(stud);   
                         }
+                        Console.ResetColor();
                         Console.WriteLine("Всего план-графиков записано: " + studList.Count);
                         stopwatch.Stop();
                         Console.WriteLine("Time: " + stopwatch.Elapsed);
@@ -115,11 +143,15 @@ namespace testApp
                         var student = newModel.FindStudent(name);
                         if (student != null)
                         {
+                            Console.ForegroundColor = ConsoleColor.White;
                             Console.WriteLine(student.ToString());
+                            Console.ResetColor();
                         }
                         else
                         {
+                            Console.ForegroundColor = ConsoleColor.Red;
                             Console.WriteLine("Not found");
+                            Console.ResetColor();
                         }
                         stopwatch.Stop();
                         Console.WriteLine("Time: " + stopwatch.Elapsed);
@@ -133,7 +165,7 @@ namespace testApp
                         Console.Write("Add name: ");
                         var name = Console.ReadLine();
                         stopwatch.Start();
-                        Console.WriteLine(newModel.DeleteStudent(name));
+                        PrintReport(newModel.DeleteStudent(name));
                         stopwatch.Stop();
                         Console.WriteLine("Time: " + stopwatch.Elapsed);
                         Console.ReadKey();
@@ -143,11 +175,32 @@ namespace testApp
                     case "0":
                     {
                         stopwatch = new Stopwatch();
-                        stopwatch.Start();
-                        Console.WriteLine(newModel.DeleteAll());
-                        stopwatch.Stop();
-                        Console.WriteLine("Time: " + stopwatch.Elapsed);
-                        Console.ReadKey();
+                        Console.WriteLine("Are you sure? (y,n)");
+                        string qLine = Console.ReadLine();
+                        switch (qLine)
+                        {
+                            case "y":
+                            {
+                                stopwatch.Start();
+                                PrintReport(newModel.DeleteAll());
+                                stopwatch.Stop();
+                                Console.WriteLine("Time: " + stopwatch.Elapsed);
+                                Console.ReadKey();
+                                break;
+                            }
+                            case "n":
+                            {
+                                Console.WriteLine("Okay.");
+                                Console.ReadKey();
+                                break;
+                            }
+                            default:
+                            {
+                                Console.WriteLine("Wrong input.");
+                                Console.ReadKey();
+                                break;
+                            }
+                        }
                         Console.Clear();
                         continue;
                     }
@@ -161,7 +214,7 @@ namespace testApp
                         Console.Write("Add date: ");
                         var date = Console.ReadLine();
                         stopwatch.Start();
-                        Console.WriteLine(newModel.SetCheck(name, point, date));
+                        PrintReport(newModel.SetCheck(name, point, date));
                         stopwatch.Stop();
                         Console.WriteLine("Time: " + stopwatch.Elapsed);
                         Console.ReadKey();
@@ -176,7 +229,7 @@ namespace testApp
                         Console.Write("Add point: ");
                         var point = Console.ReadLine();
                         stopwatch.Start();
-                        Console.WriteLine(newModel.DeleteCheck(name, point));
+                        PrintReport(newModel.DeleteCheck(name, point));
                         stopwatch.Stop();
                         Console.WriteLine("Time: " + stopwatch.Elapsed);
                         Console.ReadKey();
